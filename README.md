@@ -13,7 +13,9 @@ Ground layer was also generated based on OpenStreetMap data with a separate off-
 Additionally two major effects were applied:
 
 -PSSM shadowing which is an improved technique inherited from the OpenSceneGraph project. Instead of N-parallel split passes we can use a single Layered pass which is rendered through FBO into Texture2DArray.
+
 -Ambient Occlusion adapted to OpenSceneGraph from this project: https://github.com/nvpro-samples/gl_ssao
+
 
 Before first launch:
 
