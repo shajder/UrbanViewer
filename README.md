@@ -1,4 +1,7 @@
 # UrbanViewer
+
+![Result footage](https://github.com/shajder/UrbanViewer/blob/main/ci.jpg)
+
 This is an example of OpenStreetMap data viewer implemented based on the OpenSceneGraph library.
 
 Main idea of this small project is to visualize cities' urban areas with a single instanced box.
