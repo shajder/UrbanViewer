@@ -221,13 +221,11 @@ static char layered_shadow_cast_geom[] =
 
 static char screen_vert[] =
 "#version 420 compatibility\n"
-"varying vec2 tc;                                                                           \n"
-"layout(location = 0) in vec4 VertexPosition;                                               \n"
-"layout(location = 8) in vec2 VertexTexCoord0;                                              \n"
+"out vec2 tc;                                                                               \n"
 "void main( )                                                                               \n"
 "{                                                                                          \n"
-"    gl_Position   = gl_ModelViewProjectionMatrix * VertexPosition;                         \n"
-"    tc = VertexTexCoord0;                                                                  \n"
+"    gl_Position   = gl_ModelViewProjectionMatrix * gl_Vertex;                              \n"
+"    tc = gl_MultiTexCoord0.xy;                                                             \n"
 "}                                                                                          \n";
 
 ////////////////////////////////////////////////////////////////////////////////

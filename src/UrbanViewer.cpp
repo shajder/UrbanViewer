@@ -31,6 +31,7 @@
 #include "RenderingResources.h"
 #include "Shaders.h"
 
+
 ////////////////////////////////////////////////////////////////////////////////
 
 // simple structure to hold global variables in one package
@@ -111,13 +112,18 @@ struct UpdateUniformsCallback : public osg::NodeCallback
       traverse(node, nv);
 
       // now it is safe to update uniforms
-      osgUtil::CullVisitor* cv = (osgUtil::CullVisitor*)nv;
+      osgUtil::CullVisitor* cv = nv->asCullVisitor();
       if (!cv) return;
+
+      auto camera = cv->getRenderInfo().getView()->getCamera();
+
+      if (!camera->getViewport() || !camera->getViewport()->valid())
+        return;
 
       if (cv->getRenderInfo().getView() && cv->getRenderInfo().getView()->getCamera())
       {
-        osg::Matrixd viewMat = cv->getRenderInfo().getView()->getCamera()->getViewMatrix();
-        osg::Matrixd projMat = *cv->getProjectionMatrix();
+        osg::Matrixd viewMat = camera->getViewMatrix();
+        osg::Matrixd projMat = camera->getProjectionMatrix();
 
         if (cv->getComputeNearFarMode() && cv->getCalculatedFarPlane() >= cv->getCalculatedNearPlane())
         {
@@ -128,39 +134,40 @@ struct UpdateUniformsCallback : public osg::NodeCallback
           cv->clampProjectionMatrixImplementation(projMat, znear, zfar);
         }
 
-        // first update non-uniform stuff
-        if (rr.pssm.valid())
         {
+          if (rr.sunLight.valid())
           {
-            if (rr.sunLight.valid())
-            {
-              osg::Vec3d lpos = rr.sunPos;
-              rr.sunLight->setPosition(osg::Vec4(lpos[0], lpos[1], lpos[2], 0));
-              lpos.normalize();
-              rr.sunLight->setDirection(-lpos);
-            }
-
-            {
-              auto vp = cv->getRenderInfo().getView()->getCamera()->getViewport();
-              auto viewportUnif = rr.sceneRoot->getOrCreateStateSet()->getOrCreateUniform
-              ("viewport", osg::Uniform::FLOAT_VEC2);
-              viewportUnif->set(osg::Vec2(float(vp->width()), float(vp->height())));
-            }
+            osg::Vec3d lpos = rr.sunPos;
+            rr.sunLight->setPosition(osg::Vec4(lpos[0], lpos[1], lpos[2], 0));
+            lpos.normalize();
+            rr.sunLight->setDirection(-lpos);
           }
 
           {
-            {
-              osg::Vec3d ldir;
-              auto lightDirBase = rr.sunPos;
+            auto vp = camera->getViewport();
+            auto viewportUnif = rr.sceneRoot->getOrCreateStateSet()->getOrCreateUniform
+            ("viewport", osg::Uniform::FLOAT_VEC2);
+            viewportUnif->set(osg::Vec2(float(vp->width()), float(vp->height())));
+          }
 
-              ldir = osg::Matrix::transform3x3(lightDirBase, viewMat);
-              ldir.normalize();
+          {
+            osg::Vec3d ldir;
+            auto lightDirBase = rr.sunPos;
 
-              auto lightBaseDirUnif = rr.sceneRoot->getOrCreateStateSet()->getOrCreateUniform
-              ("lightPos", osg::Uniform::FLOAT_VEC3);
-              lightBaseDirUnif->set(osg::Vec3f(ldir));
-            }
+            ldir = osg::Matrix::transform3x3(lightDirBase, viewMat);
+            ldir.normalize();
 
+            auto lightBaseDirUnif = rr.sceneRoot->getOrCreateStateSet()->getOrCreateUniform
+            ("lightPos", osg::Uniform::FLOAT_VEC3);
+            lightBaseDirUnif->set(osg::Vec3f(ldir));
+          }
+        }
+
+        // first update non-uniform stuff
+        if (rr.pssm.valid())
+        {
+
+          {
             auto pssm_map = rr.pssm->getPSSMMap();
             auto globalLightStates = rr.sceneRoot->getOrCreateStateSet();
 
@@ -199,6 +206,7 @@ struct UpdateUniformsCallback : public osg::NodeCallback
         }
 
         // update AO uniform buffer values
+        if (rr.hbaoBuf.valid())
         {
           const double* P = projMat.ptr();
           rr.hbaoBuf->getData().projInfo.set(
@@ -707,12 +715,7 @@ osg::Group* createShadowScene(std::string& buildings, std::string& terrain, osgV
   rr.sunLight->setLightNum(0);
   rr.sunLight->setPosition(osg::Vec4(rr.sunPos[0], rr.sunPos[1], rr.sunPos[2], 0));
 
-#if 0
-  auto scene = new osg::LightSource();
-  scene->setLight(_sunLight);
-#else
   auto scene = new osg::Group();
-#endif
 
   osg::DisplaySettings::instance()->setImplicitBufferAttachmentRenderMask(0);
 
@@ -729,10 +732,6 @@ osg::Group* createShadowScene(std::string& buildings, std::string& terrain, osgV
   scene->getOrCreateStateSet()->addUniform(new osg::Uniform("sampler1", 1));
   scene->getOrCreateStateSet()->addUniform(new osg::Uniform("sampler2", 2));
 
-  scene->getOrCreateStateSet()->addUniform(new osg::Uniform("DynamicRange1", 1.f));
-  scene->getOrCreateStateSet()->addUniform(new osg::Uniform("DynamicRange2", 0.25f));
-  scene->getOrCreateStateSet()->addUniform(new osg::Uniform("FresnelApproxPowFactor", 32.f));
-
   {
     osgViewer::Viewer::Windows windows;
     viewer->getWindows(windows);
@@ -743,6 +742,7 @@ osg::Group* createShadowScene(std::string& buildings, std::string& terrain, osgV
     }
   }
 
+#if USE_SHADOW
   auto shadowedScene = new osgShadow::ShadowedScene;
 
   float maxFarPlane = 100000.f;
@@ -765,10 +765,18 @@ osg::Group* createShadowScene(std::string& buildings, std::string& terrain, osgV
 
   scene->addChild(shadowedScene);
   shadowedScene->addChild(city);
+
+  rr.pssm = pssm;
+
+#else
+
+  scene->addChild(city);
+
+#endif
+
   scene->setCullCallback(new UpdateUniformsCallback());
 
   rr.sceneRoot = scene;
-  rr.pssm = pssm;
 
   return scene;
 }
@@ -1118,7 +1126,13 @@ int main(int argc, char** argv)
   arguments.getApplicationUsage()->addCommandLineOption("--dem <filename>", "Load an image/DEM and render it on a HeightField");
   arguments.getApplicationUsage()->addCommandLineOption("--login <url> <username> <password>", "Provide authentication information for http file access.");
 
+  unsigned width = 1920, height = 1080;
+#if !HARDCODED_WINDOW_SIZE
   osgViewer::Viewer viewer(arguments);
+#else
+  osgViewer::Viewer viewer;
+  viewer.setUpViewInWindow(0, 0, width, height);
+#endif
 
   unsigned int helpType = 0;
   if ((helpType = arguments.readHelpType()))
@@ -1181,9 +1195,9 @@ int main(int argc, char** argv)
 
   osg::Group* root = createShadowScene(buildings, terrain, &viewer);
 
-  unsigned width = 0, height = 0;
+#if !HARDCODED_WINDOW_SIZE
   readDisplay(width, height);
-
+#endif
   osg::Group* screen = createScreenCamera(root, width, height);
 
   // any option left unread are converted into errors to write out later.

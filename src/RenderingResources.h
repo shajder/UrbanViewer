@@ -19,7 +19,10 @@ constexpr short MAX_SAMPLES = 1;
 
 constexpr unsigned SHADOW_MASK = 0x00000001;
 constexpr unsigned FADE_MASK = 0x00000200;
-constexpr short  USE_HBAO = 1;
+
+#define USE_HBAO 1
+#define USE_SHADOW 1
+#define HARDCODED_WINDOW_SIZE 1
 
 ////////////////////////////////////////////////////////////////////////////////
 
