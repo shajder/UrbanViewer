@@ -1,7 +1,7 @@
 # UrbanViewer
 This is an example of OpenStreetMap data viewer implemented based on the OpenSceneGraph library.
 
-Main idea of this small project is to visualize cities' urban areas with a single instanced box.
+Main idea of this small project is to visualize urban areas of large cities with a single instanced box.
 
 As input data OpenStreetMap shapefiles and pbf were converted to tiled LODs with instanced textures attached to box geometry underneath.
 
@@ -17,6 +17,6 @@ Before first launch:
 -As an addition to the project one city model is included. Unpack .zip file first.
 
 -Set Command line:
-  --city Moscow
+  --city London
 
   If you need more info feel free to contact me at marcin.hajder [at] gmail.com

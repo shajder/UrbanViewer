@@ -94,7 +94,6 @@ INCLUDE_DIRECTORIES( ${INCLUDE_DIRECTORIES} ./src )
 SET(UrbanViewer_SOURCE_FILES 
   src/UrbanViewer.cpp
   src/PSSMLayered.cpp
-  src/RenderingResources.cpp
 )
 
 LINK_DIRECTORIES (${LINK_DIRECTORIES} ${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}) 
