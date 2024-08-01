@@ -1025,8 +1025,14 @@ osg::Group* createScreenCamera(osg::Group* scene, unsigned x, unsigned y)
   screenCamera->setAllowEventFocus(false);
 
   // specify multisampled FBO
+#if 1
   screenCamera->attach(osg::Camera::COLOR_BUFFER, colorTarget, 0, 0, false, 4, 4);
   screenCamera->attach(osg::Camera::DEPTH_BUFFER, depthTarget, 0, 0, false, 4, 4);
+#else
+  screenCamera->attach(osg::Camera::COLOR_BUFFER, colorTarget);
+  screenCamera->attach(osg::Camera::DEPTH_BUFFER, depthTarget);
+#endif
+
   screenCamera->addChild(scene);
   root->addChild(screenCamera);
 
@@ -1082,7 +1088,6 @@ osg::Group* createScreenCamera(osg::Group* scene, unsigned x, unsigned y)
 
   auto screenRect_linearize = new osg::Group;
   auto screenRect_viewnormal = new osg::Group;
-  auto screenRect_hbao2_calc = new osg::Group;
   auto screenRect_reinterleave = new osg::Group;
 
   // depth linearize pass

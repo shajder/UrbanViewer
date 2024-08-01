@@ -252,11 +252,13 @@ uniform vec4 clipInfo;
 uniform sampler2D sampler0;                                                  
 layout(location = 0, index = 0) out float out_Color;                         
                                                                              
-float reconstructCSZ(float d, vec4 clipInfo) {                               
+float reconstructCSZ(float d, vec4 clipInfo) 
+{                               
     return ((clipInfo[0]*clipInfo[2]) / (clipInfo[1] * d + clipInfo[2]));    
 }                                                                            
                                                                              
-void main() {                                                                
+void main() 
+{                                                                
   float depth = texelFetch(sampler0, ivec2(gl_FragCoord.xy), 0).x;           
   out_Color = reconstructCSZ(depth, clipInfo);                               
 })";
@@ -297,10 +299,6 @@ layout(binding = 0) uniform sampler2D sampler0;
 //----------------------------------------------------------------------------------     
 layout(location = 0, index = 0) out vec4 out_Color;                                      
 in vec2 tc;                                                                              
-//----------------------------------------------------------------------------------     
-void outputColor(vec4 color) {                                                           
-  out_Color = color;                                                                     
-}                                                                                        
 //----------------------------------------------------------------------------------     
 vec3 UVToView(vec2 uv, float eye_z)                                                      
 {             
@@ -388,7 +386,7 @@ void main()
   vec2 Rand = control.jitters[RandInd.y * 4 + RandInd.x];
                                                                                           
   float AO = ComputeCoarseAO(uv, RadPix, Rand, ViewPos, ViewNor);                         
-  outputColor(vec4(pow(AO, control.powExp)));                                             
+  out_Color = vec4(pow(AO, control.powExp));
 })";
 
 ////////////////////////////////////////////////////////////////////////////////
