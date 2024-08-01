@@ -209,7 +209,7 @@ struct UpdateUniformsCallback : public osg::NodeCallback
         if (rr.hbaoBuf.valid())
         {
           const double* P = projMat.ptr();
-          rr.hbaoBuf->getData().projInfo.set(
+          rr.hbaoBuf->getData().projInfo = osg::Vec4f(
             2.0f / (P[4 * 0 + 0]),                  // (x) * (R - L)/N
             2.0f / (P[4 * 1 + 1]),                  // (y) * (T - B)/N
             -(1.0f - P[4 * 2 + 0]) / P[4 * 0 + 0],  // L/N
@@ -248,6 +248,87 @@ struct UpdateUniformsCallback : public osg::NodeCallback
     traverse(node, nv);
   }
 };
+
+////////////////////////////////////////////////////////////////////////////////
+// Class to perform general adaptation of the shaders
+class CheckGLSLVersionVisitor : public osg::NodeVisitor
+{
+public:
+  //////////////////////////////////////////////////////////////////////////////
+
+  CheckGLSLVersionVisitor() :
+    osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN)
+  {
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  void apply(osg::Node& node) override
+  {
+    apply(node.getStateSet());
+    traverse(node);
+  }
+
+  //////////////////////////////////////////////////////////////////////////////
+
+  void apply(osg::StateSet* pss)
+  {
+    if (!pss) return;
+    osg::Program* prog = dynamic_cast<osg::Program*>(pss->getAttribute(osg::StateAttribute::PROGRAM));
+
+    if (prog)
+    {
+      osg::Shader* frag = nullptr;
+      osg::Shader* vert = nullptr;
+      for (unsigned i = 0; i < prog->getNumShaders(); i++)
+      {
+        osg::Shader* shader = prog->getShader(i);
+        switch (shader->getType())
+        {
+        case osg::Shader::FRAGMENT:
+          frag = shader;
+          break;
+        case osg::Shader::VERTEX:
+          vert = shader;
+          break;
+        }
+      }
+
+      if (frag)
+      {
+        std::string source = frag->getShaderSource();
+
+        // adapt shaders for multi-layered shadow cast processing
+        if (source.find("#version") == std::string::npos)
+        {
+          source =
+            "#version 430 compatibility \n"
+            + source;
+
+          frag->setShaderSource(source);
+          frag->dirtyShader();
+        }
+      }
+
+
+      if (vert)
+      {
+        std::string source = vert->getShaderSource();
+        // adapt shaders for multi-layered shadow cast processing
+        if (source.find("#version") == std::string::npos)
+        {
+          source =
+            "#version 430 compatibility \n"
+            + source;
+
+          vert->setShaderSource(source);
+          vert->dirtyShader();
+        }
+      }
+    }
+  }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Class to adapt shaders for PSSM shadowing
@@ -413,8 +494,8 @@ public:
       {
         std::string source = vert->getShaderSource();
 
-        unsigned sl = _vert_pattern.size();
-        unsigned pos = source.find(_vert_pattern);
+        size_t sl = _vert_pattern.size();
+        size_t pos = source.find(_vert_pattern);
         std::string nsource = source;
 
         if (pos < source.size())
@@ -588,41 +669,42 @@ void setupTiledScene(osg::Node* node)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-osg::Group* preProcessCity(osg::Group* bld, osg::Group* ter)
+osg::Group* preProcessCity(osg::Group* buildings, osg::Group* terrain)
 {
-  if (!bld || !ter)
+  if (!buildings || !terrain)
     return nullptr;
 
   osg::Group* city = new osg::Group();
 
-  bld = bld->getChild(0)->asGroup();    // buildings
-  ter = ter->getChild(0)->asGroup();    // tiles
+  osg::Group * bld_root = buildings->getChild(0)->asGroup();    // buildings
+  osg::Group * ter_root = terrain->getChild(0)->asGroup();    // tiles
 
-  setupTiledScene(ter);
+  setupTiledScene(ter_root);
 
+  osg::ref_ptr<osg::Group> bld_scene = new osg::Group;
   osg::Group* depth_parent = new osg::Group;
   osg::Group* forward_parent = new osg::Group;
 
+  // buildings both cast and receive shadows, it needs different path than terrain
   {
     forward_parent->getOrCreateStateSet()->setAttribute
       (new osg::FrontFace(osg::FrontFace::COUNTER_CLOCKWISE), osg::StateAttribute::ON);
     depth_parent->getOrCreateStateSet()->setAttribute
       (new osg::FrontFace(osg::FrontFace::COUNTER_CLOCKWISE), osg::StateAttribute::ON);
-    forward_parent->addChild(bld);
-    depth_parent->addChild(bld);
+    forward_parent->addChild(bld_root);
+    depth_parent->addChild(bld_root);
 
     depth_parent->setNodeMask(SHADOW_MASK); // depth scene with simple shader
     forward_parent->setNodeMask(~SHADOW_MASK); // forward scene with regular shader
 
-    bld = new osg::Group;
-    bld->addChild(forward_parent);
-    bld->addChild(depth_parent);
+    bld_scene->addChild(forward_parent);
+    bld_scene->addChild(depth_parent);
   }
 
   {
-    ter->setNodeMask(~SHADOW_MASK); // tiles cast no shadows
-    city->addChild(bld);
-    city->addChild(ter);
+    ter_root->setNodeMask(~SHADOW_MASK); // tiles cast no shadows
+    city->addChild(bld_scene);
+    city->addChild(ter_root);
   }
 
   {
@@ -673,7 +755,7 @@ osg::Group* preProcessCity(osg::Group* bld, osg::Group* ter)
 
     AdaptProg2PSSMVisitor rvpv(vshader, fshader, std::move(vpat), std::move(fpat));
     rvpv.setTraversalMask(~FADE_MASK);
-    ter->accept(rvpv);
+    ter_root->accept(rvpv);
 
     if (!rvpv.getProgramsSet().empty())
     {
@@ -685,9 +767,13 @@ osg::Group* preProcessCity(osg::Group* bld, osg::Group* ter)
       }
 
       auto fixed = *rvpv.getPSSMAdaptedProgramsSet().begin();
-      ter->getOrCreateStateSet()->setAttribute(fixed);
+      ter_root->getOrCreateStateSet()->setAttribute(fixed);
     }
   }
+
+  CheckGLSLVersionVisitor cvv;
+  city->accept(cvv);
+
   return city;
 }
 
@@ -742,7 +828,6 @@ osg::Group* createShadowScene(std::string& buildings, std::string& terrain, osgV
     }
   }
 
-#if USE_SHADOW
   auto shadowedScene = new osgShadow::ShadowedScene;
 
   float maxFarPlane = 100000.f;
@@ -767,12 +852,6 @@ osg::Group* createShadowScene(std::string& buildings, std::string& terrain, osgV
   shadowedScene->addChild(city);
 
   rr.pssm = pssm;
-
-#else
-
-  scene->addChild(city);
-
-#endif
 
   scene->setCullCallback(new UpdateUniformsCallback());
 
@@ -808,7 +887,6 @@ void setupHBOAPass(int width, int height)
   rr.ssao_down_w = quarterWidth;
   rr.ssao_down_h = quarterHeight;
 
-  rr.hbaoBuf->getData().invQuarterRes = osg::Vec2(1.0f / float(quarterWidth), 1.0f / float(quarterHeight));
   rr.hbaoBuf->getData().invFullRes = osg::Vec2(1.0f / float(width), 1.0f / float(height));
 
   if (!rr.hbaoUBO.valid())
@@ -820,7 +898,7 @@ void setupHBOAPass(int width, int height)
     std::mt19937 rmt;
     float numDir = 8;  // keep in sync to glsl
 
-    for (int i = 0; i < HBAO_RANDOM_ELEMENTS * MAX_SAMPLES; i++)
+    for (int i = 0; i < HBAO_RANDOM_ELEMENTS; i++)
     {
       float Rand1 = static_cast<float>(rmt()) / 4294967296.0f;
       float Rand2 = static_cast<float>(rmt()) / 4294967296.0f;
@@ -828,14 +906,11 @@ void setupHBOAPass(int width, int height)
       // Use random rotation angles in [0,2PI/NUM_DIRECTIONS)
       float Angle = 2.f * osg::PI * Rand1 / numDir;
 
-      rr.hbaoRandom[i][0] = Angle;
-      rr.hbaoRandom[i][1] = Rand2;
+      rr.hbaoRandom[i*2][0] = Angle;
+      rr.hbaoRandom[i*2][1] = Rand2;
     }
 
-    for (int i = 0; i < HBAO_RANDOM_ELEMENTS; i++)
-    {
-      rr.hbaoBuf->getData().jitters[i] = rr.hbaoRandom[i];
-    }
+    memcpy(rr.hbaoBuf->getData().jitters, rr.hbaoRandom, sizeof(osg::Vec2f) * HBAO_RANDOM_ELEMENTS);
   }
 }
 
@@ -1133,6 +1208,8 @@ int main(int argc, char** argv)
   osgViewer::Viewer viewer;
   viewer.setUpViewInWindow(0, 0, width, height);
 #endif
+
+  osg::setNotifyLevel(osg::FATAL);
 
   unsigned int helpType = 0;
   if ((helpType = arguments.readHelpType()))

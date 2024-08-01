@@ -20,8 +20,7 @@ constexpr short MAX_SAMPLES = 1;
 constexpr unsigned SHADOW_MASK = 0x00000001;
 constexpr unsigned FADE_MASK = 0x00000200;
 
-#define USE_HBAO 1
-#define USE_SHADOW 1
+#define USE_HBAO              1
 #define HARDCODED_WINDOW_SIZE 1
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +38,7 @@ struct RenderingResources
     bool          ortho = false;
   };
 
-  HBAOSetup             hbaoSetup;
+  HBAOSetup hbaoSetup;
 
   const int numLayers = 4;
 
@@ -54,19 +53,18 @@ struct RenderingResources
 
   struct HBAOData
   {
-    float             radToScreen;        // radius
-    float             rad2;               // 1/radius
-    float             negInvRad2;         // radius * radius
-    float             NDotVBias;
-    osg::Vec2         invFullRes;
-    osg::Vec2         invQuarterRes;
-    float             AOMult;
-    float             powExp;
-    osg::Vec4         projInfo;
-    osg::Vec2         jitters[HBAO_RANDOM_SIZE * HBAO_RANDOM_SIZE];
+    alignas(16) osg::Vec4f   projInfo;
+    alignas(16) osg::Vec2f   invFullRes;
+    alignas(16) osg::Vec2f   jitters[HBAO_RANDOM_SIZE * HBAO_RANDOM_SIZE * 2];
+    alignas(4) float         radToScreen;        // radius
+    alignas(4) float         rad2;               // 1/radius
+    alignas(4) float         negInvRad2;         // radius * radius
+    alignas(4) float         NDotVBias;
+    alignas(4) float         AOMult;
+    alignas(4) float         powExp;
   };
 
-  osg::ref_ptr< osg::BufferTemplate< HBAOData > >   hbaoBuf;
+  osg::ref_ptr<osg::BufferTemplate< HBAOData>>      hbaoBuf;
   osg::ref_ptr<osg::UniformBufferObject>            hbaoUBO;
   osg::ref_ptr<osg::UniformBufferBinding>           hbaoUBB;
 
@@ -74,7 +72,7 @@ struct RenderingResources
   osg::ref_ptr<osg::Uniform>                        projInfo;
   osg::ref_ptr<osg::Uniform>                        InvFullResolution;
 
-  osg::Vec2f  hbaoRandom[HBAO_RANDOM_ELEMENTS * MAX_SAMPLES];
+  osg::Vec2f  hbaoRandom[HBAO_RANDOM_ELEMENTS];
 
   int ssao_down_w = 0;
   int ssao_down_h = 0;
