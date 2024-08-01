@@ -1057,6 +1057,8 @@ osg::Group* createScreenCamera(osg::Group* scene, unsigned x, unsigned y)
     pss->setNestRenderBins(false);
   }
 
+
+#if USE_HBAO
   // setup ambient occlusion pass which will be drawn at the top of screen space quad
   setupHBOAPass(x, y);
 
@@ -1083,7 +1085,6 @@ osg::Group* createScreenCamera(osg::Group* scene, unsigned x, unsigned y)
   auto screenRect_hbao2_calc = new osg::Group;
   auto screenRect_reinterleave = new osg::Group;
 
-#if USE_HBAO
   // depth linearize pass
   {
     osg::ref_ptr<osg::Camera> lin_camera = create_new_camera(x, y, root);
